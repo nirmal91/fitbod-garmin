@@ -1,0 +1,73 @@
+name: Upload to Garmin
+
+on:
+  # Triggered by n8n webhook
+  repository_dispatch:
+    types: [strava-activity]
+  
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      activity_name:
+        description: 'Activity name'
+        required: true
+        default: 'Test Workout'
+      activity_type:
+        description: 'Activity type'
+        required: true
+        default: 'strength_training'
+      duration_seconds:
+        description: 'Duration in seconds'
+        required: true
+        default: '3600'
+      start_time:
+        description: 'Start time (ISO format)'
+        required: false
+      calories:
+        description: 'Calories burned'
+        required: false
+        default: '0'
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Upload to Garmin (from webhook)
+        if: github.event_name == 'repository_dispatch'
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+        run: |
+          python src/garmin_uploader.py \
+            --name "${{ github.event.client_payload.activity_name }}" \
+            --type "${{ github.event.client_payload.activity_type }}" \
+            --duration "${{ github.event.client_payload.duration_seconds }}" \
+            --start-time "${{ github.event.client_payload.start_time }}" \
+            --calories "${{ github.event.client_payload.calories }}"
+
+      - name: Upload to Garmin (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+        run: |
+          python src/garmin_uploader.py \
+            --name "${{ github.event.inputs.activity_name }}" \
+            --type "${{ github.event.inputs.activity_type }}" \
+            --duration "${{ github.event.inputs.duration_seconds }}" \
+            --start-time "${{ github.event.inputs.start_time }}" \
+            --calories "${{ github.event.inputs.calories }}"
+
