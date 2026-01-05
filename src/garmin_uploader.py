@@ -59,11 +59,15 @@ def get_garmin_client() -> Garmin:
     # Method 1: Try session token first (more reliable)
     if session_token:
         try:
-            import json
-            token_data = json.loads(session_token)
-            client = Garmin(email or "", password or "")
-            client.login(token_data)
-            print("✓ Successfully authenticated with session token")
+            # Create Garmin client without login
+            client = Garmin()
+            
+            # Load session token directly into client's garth instance
+            client.garth.loads(session_token)
+            
+            # Test if session works by fetching display name
+            name = client.get_full_name()
+            print(f"✓ Successfully authenticated with session token (user: {name})")
             return client
         except Exception as e:
             print(f"Warning: Session token auth failed: {e}")
@@ -83,8 +87,8 @@ def get_garmin_client() -> Garmin:
         # Print session token for future use (user can save this)
         try:
             token = client.garth.dumps()
-            print("\n💡 TIP: Save this session token as GARMIN_SESSION secret for more reliable auth:")
-            print(f"   (Token is ~2000 chars, starts with: {token[:50]}...)")
+            print("\n💡 TIP: Save this session token as GARMIN_SESSION secret for more reliable auth")
+            print(f"   Token length: {len(token)} characters")
         except Exception:
             pass
             
@@ -185,13 +189,16 @@ def upload_activity(
 
     garmin_type = get_activity_type(activity_type)
 
-    # Format start time for Garmin API
-    start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    # Format start time for Garmin API (local time format)
+    start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S.000")
+    
+    # Convert duration to minutes
+    duration_min = max(1, duration_seconds // 60)
 
     print(f"\nActivity details:")
     print(f"  Name: {name}")
-    print(f"  Type: {garmin_type['typeKey']} (ID: {garmin_type['typeId']})")
-    print(f"  Duration: {duration_seconds // 60} minutes")
+    print(f"  Type: {garmin_type['typeKey']}")
+    print(f"  Duration: {duration_min} minutes")
     print(f"  Start Time: {start_time_str}")
     print(f"  Calories: {calories}")
 
@@ -205,18 +212,22 @@ def upload_activity(
     print("\nUploading to Garmin Connect...")
 
     try:
-        # Create manual activity
-        response = client.add_manual_activity(
+        # Create manual activity using garminconnect API
+        # Parameters: start_datetime, time_zone, type_key, distance_km, duration_min, activity_name
+        response = client.create_manual_activity(
+            start_datetime=start_time_str,
+            time_zone="UTC",  # Use UTC since Strava times are in UTC
+            type_key=garmin_type["typeKey"],
+            distance_km=0.0,  # No distance for strength training
+            duration_min=duration_min,
             activity_name=name,
-            activity_type_id=garmin_type["typeId"],
-            start_time=start_time_str,
-            duration_seconds=duration_seconds,
-            calories=calories if calories > 0 else None,
-            description="Synced from Fitbod via Strava",
         )
 
         print(f"\n✓ Activity uploaded successfully!")
-        print(f"  Activity ID: {response.get('activityId', 'unknown')}")
+        if isinstance(response, dict):
+            print(f"  Activity ID: {response.get('activityId', 'unknown')}")
+        else:
+            print(f"  Response: {response}")
 
     except Exception as e:
         print(f"\n✗ Error uploading activity: {e}")
