@@ -50,6 +50,7 @@ jobs:
         env:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          GARMIN_SESSION: ${{ secrets.GARMIN_SESSION }}
         run: |
           python src/garmin_uploader.py \
             --name "${{ github.event.client_payload.activity_name }}" \
@@ -63,6 +64,7 @@ jobs:
         env:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          GARMIN_SESSION: ${{ secrets.GARMIN_SESSION }}
         run: |
           python src/garmin_uploader.py \
             --name "${{ github.event.inputs.activity_name }}" \

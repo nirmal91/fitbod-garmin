@@ -46,21 +46,56 @@ ACTIVITY_TYPE_MAP = {
 
 
 def get_garmin_client() -> Garmin:
-    """Authenticate and return Garmin client."""
+    """Authenticate and return Garmin client.
+    
+    Supports two authentication methods:
+    1. Session token (GARMIN_SESSION) - preferred, avoids login issues
+    2. Email + password - fallback, may trigger CAPTCHA
+    """
     email = os.environ.get("GARMIN_EMAIL")
     password = os.environ.get("GARMIN_PASSWORD")
+    session_token = os.environ.get("GARMIN_SESSION")
 
+    # Method 1: Try session token first (more reliable)
+    if session_token:
+        try:
+            import json
+            token_data = json.loads(session_token)
+            client = Garmin(email or "", password or "")
+            client.login(token_data)
+            print("✓ Successfully authenticated with session token")
+            return client
+        except Exception as e:
+            print(f"Warning: Session token auth failed: {e}")
+            print("Falling back to email/password...")
+
+    # Method 2: Email + password
     if not email or not password:
         print("Error: GARMIN_EMAIL and GARMIN_PASSWORD environment variables required")
+        print("       Or provide GARMIN_SESSION token for more reliable auth")
         sys.exit(1)
 
     try:
         client = Garmin(email, password)
         client.login()
         print("✓ Successfully logged into Garmin Connect")
+        
+        # Print session token for future use (user can save this)
+        try:
+            token = client.garth.dumps()
+            print("\n💡 TIP: Save this session token as GARMIN_SESSION secret for more reliable auth:")
+            print(f"   (Token is ~2000 chars, starts with: {token[:50]}...)")
+        except Exception:
+            pass
+            
         return client
     except Exception as e:
         print(f"Error logging into Garmin Connect: {e}")
+        print("\nTroubleshooting:")
+        print("  1. Check email/password are correct")
+        print("  2. Try logging into Garmin Connect manually first")
+        print("  3. If you have 2FA enabled, you may need to use session tokens")
+        print("  4. Garmin may be rate-limiting - try again in a few minutes")
         sys.exit(1)
 
 
