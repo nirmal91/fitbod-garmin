@@ -101,6 +101,42 @@ def get_activity_type(activity_type_str: str) -> dict:
     return ACTIVITY_TYPE_MAP["strength_training"]
 
 
+def check_duplicate(client: Garmin, start_time: datetime, duration_seconds: int) -> bool:
+    """Check if an activity with similar start time already exists in Garmin."""
+    try:
+        # Get activities from the same day
+        date_str = start_time.strftime("%Y-%m-%d")
+        activities = client.get_activities_by_date(date_str, date_str)
+
+        if not activities:
+            return False
+
+        # Check for activities with similar start time (within 5 minutes)
+        for activity in activities:
+            activity_start = activity.get("startTimeLocal", "")
+            if not activity_start:
+                continue
+
+            try:
+                existing_start = date_parser.parse(activity_start)
+                time_diff = abs((existing_start.replace(tzinfo=None) - start_time.replace(tzinfo=None)).total_seconds())
+
+                # If start times are within 5 minutes, consider it a duplicate
+                if time_diff < 300:
+                    print(f"⚠ Duplicate detected: Activity '{activity.get('activityName')}' "
+                          f"started at {activity_start}")
+                    return True
+            except Exception:
+                continue
+
+        return False
+
+    except Exception as e:
+        print(f"Warning: Could not check for duplicates: {e}")
+        # If we can't check, proceed with upload (better to have duplicate than miss)
+        return False
+
+
 def upload_activity(
     client: Garmin,
     name: str,
@@ -108,6 +144,7 @@ def upload_activity(
     duration_seconds: int,
     start_time: datetime,
     calories: int = 0,
+    skip_duplicate_check: bool = False,
 ) -> None:
     """Upload a manual activity to Garmin Connect."""
 
@@ -116,12 +153,21 @@ def upload_activity(
     # Format start time for Garmin API
     start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-    print(f"\nUploading activity to Garmin Connect:")
+    print(f"\nActivity details:")
     print(f"  Name: {name}")
     print(f"  Type: {garmin_type['typeKey']} (ID: {garmin_type['typeId']})")
     print(f"  Duration: {duration_seconds // 60} minutes")
     print(f"  Start Time: {start_time_str}")
     print(f"  Calories: {calories}")
+
+    # Check for duplicates before uploading
+    if not skip_duplicate_check:
+        print("\nChecking for duplicates in Garmin...")
+        if check_duplicate(client, start_time, duration_seconds):
+            print("\n⏭ Skipping upload: Activity already exists in Garmin Connect")
+            return
+
+    print("\nUploading to Garmin Connect...")
 
     try:
         # Create manual activity
@@ -149,6 +195,8 @@ def main():
     parser.add_argument("--duration", required=True, help="Duration in seconds")
     parser.add_argument("--start-time", help="Start time (ISO format)")
     parser.add_argument("--calories", default="0", help="Calories burned")
+    parser.add_argument("--skip-duplicate-check", action="store_true", 
+                        help="Skip checking for duplicate activities")
 
     args = parser.parse_args()
 
@@ -164,7 +212,7 @@ def main():
     # Authenticate with Garmin
     client = get_garmin_client()
 
-    # Upload activity
+    # Upload activity (with duplicate check by default)
     upload_activity(
         client=client,
         name=args.name,
@@ -172,6 +220,7 @@ def main():
         duration_seconds=duration_seconds,
         start_time=start_time,
         calories=calories,
+        skip_duplicate_check=args.skip_duplicate_check,
     )
 
     print("\n" + "=" * 50)
