@@ -212,18 +212,21 @@ def upload_activity(
     print("\nUploading to Garmin Connect...")
 
     try:
-        # Create manual activity using garminconnect API
-        # Parameters: start_datetime, time_zone, type_key, distance_km, duration_min, activity_name
+        # Create manual activity using the simple API
+        # Note: Garmin auto-calculates calories based on duration/activity type
+        # The calories from Strava are informational but may not match exactly
         response = client.create_manual_activity(
             start_datetime=start_time_str,
-            time_zone="UTC",  # Use UTC since Strava times are in UTC
+            time_zone="UTC",
             type_key=garmin_type["typeKey"],
-            distance_km=0.0,  # No distance for strength training
+            distance_km=0.0,
             duration_min=duration_min,
             activity_name=name,
         )
 
         print(f"\n✓ Activity uploaded successfully!")
+        if calories > 0:
+            print(f"  Note: Garmin auto-calculates calories (your value: {calories})")
         if isinstance(response, dict):
             print(f"  Activity ID: {response.get('activityId', 'unknown')}")
         else:
